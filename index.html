@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GymMeals - Budget High-Protein Meal Plans</title>
+<meta name="description" content="Free weekly high-protein meal plans and grocery lists for people who train. Pick your calories and budget.">
+<style>
+  *{box-sizing:border-box}
+  body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f4f6f8;color:#1b2430}
+  header{background:#12b886;color:#fff;padding:24px 16px;text-align:center}
+  header h1{margin:0 0 6px;font-size:28px}
+  main{max-width:900px;margin:0 auto;padding:16px}
+  .card{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  label{display:block;font-weight:600;margin:10px 0 4px}
+  input,select{width:100%;padding:10px;border:1px solid #cfd6dd;border-radius:8px;font-size:16px}
+  button{background:#12b886;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-size:16px;font-weight:600;cursor:pointer;margin-top:12px}
+  button.small{padding:6px 10px;font-size:13px;margin:0;background:#e9ecef;color:#1b2430}
+  button.alt{background:#1b2430}
+  .day{border-top:1px solid #e5e9ed;padding:10px 0}
+  .meal{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0}
+  .muted{color:#6b7683;font-size:14px}
+  .warn{background:#fff3bf;padding:12px;border-radius:8px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:600px){.grid{grid-template-columns:1fr}}
+  ul{padding-left:0;list-style:none}
+  li{padding:4px 0}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>GymMeals</h1>
+  <div>Budget high-protein meal plans + grocery list in 10 seconds</div>
+</header>
+<main>
+  <div class="card">
+    <div class="grid">
+      <div><label>Daily calories</label><input id="kcal" type="number" value="2400" min="1200" max="5000"></div>
+      <div><label>Budget</label>
+        <select id="budget"><option value="1">Very cheap</option><option value="2" selected>Normal</option><option value="3">No limit</option></select>
+      </div>
+      <div><label>Diet</label>
+        <select id="diet"><option value="any">Anything</option><option value="veg">Vegetarian</option></select>
+      </div>
+    </div>
+    <button onclick="generate()">Generate my week</button>
+    <div id="limitMsg" class="warn hidden" style="margin-top:12px"></div>
+  </div>
+
+  <div id="result" class="hidden">
+    <div class="card"><h2>Your 7-day plan</h2><div id="plan"></div></div>
+    <div class="card"><h2>Grocery list</h2><ul id="groceries"></ul>
+      <button class="alt" onclick="copyList()">Copy list</button></div>
+  </div>
+
+  <div class="card" id="proBox">
+    <h3>Go Pro: unlimited plans</h3>
+    <p class="muted">Free = 1 plan per week. Pro = unlimited plans, swap any meal, any time.</p>
+    <a id="buyLink" href="#" target="_blank"><button>Get Pro - $6/month</button></a>
+    <label>Already have a Pro code?</label>
+    <input id="code" placeholder="Enter your code">
+    <button class="alt" onclick="unlock()">Unlock</button>
+    <div id="proMsg" class="muted"></div>
+  </div>
+</main>
+
+<script>
+// ====== SETTINGS YOU CHANGE LATER ======
+const BUY_LINK = "#"; // paste your Lemon Squeezy checkout link here in Week 2
+const PRO_CODES = ["PRO-DEMO-1"]; // valid codes, you add new ones as people buy
+// =======================================
+
+// type: b=breakfast, l=lunch, d=dinner | k=kcal | p=protein | c=cost 1-3 | v=vegetarian 1/0
+const MEALS = [
+ {n:"Oats, whey and banana",t:"b",k:480,p:35,c:1,v:1,i:[["Oats",80,"g"],["Whey protein",30,"g"],["Banana",1,"pc"],["Milk",250,"ml"]]},
+ {n:"Scrambled eggs on toast",t:"b",k:450,p:28,c:1,v:1,i:[["Eggs",4,"pc"],["Bread",2,"slices"],["Butter",10,"g"]]},
+ {n:"Greek yogurt, oats and honey",t:"b",k:420,p:32,c:2,v:1,i:[["Greek yogurt",300,"g"],["Oats",40,"g"],["Honey",15,"g"]]},
+ {n:"Protein pancakes",t:"b",k:520,p:38,c:2,v:1,i:[["Oats",60,"g"],["Eggs",2,"pc"],["Whey protein",30,"g"],["Banana",1,"pc"]]},
+ {n:"Cottage cheese and fruit bowl",t:"b",k:380,p:30,c:2,v:1,i:[["Cottage cheese",250,"g"],["Apple",1,"pc"],["Oats",30,"g"]]},
+ {n:"Chicken, rice and broccoli",t:"l",k:650,p:50,c:1,v:0,i:[["Chicken breast",200,"g"],["Rice (dry)",90,"g"],["Broccoli",150,"g"],["Olive oil",10,"ml"]]},
+ {n:"Tuna pasta",t:"l",k:680,p:48,c:1,v:0,i:[["Tuna (can)",2,"pc"],["Pasta (dry)",100,"g"],["Tomato sauce",150,"g"]]},
+ {n:"Lentil and rice bowl",t:"l",k:620,p:30,c:1,v:1,i:[["Lentils (dry)",90,"g"],["Rice (dry)",70,"g"],["Onion",1,"pc"],["Carrot",1,"pc"]]},
+ {n:"Turkey wrap with salad",t:"l",k:560,p:42,c:2,v:0,i:[["Turkey slices",150,"g"],["Tortilla wraps",2,"pc"],["Lettuce",50,"g"],["Tomato",1,"pc"]]},
+ {n:"Chickpea and egg salad",t:"l",k:540,p:32,c:1,v:1,i:[["Chickpeas (can)",1,"pc"],["Eggs",3,"pc"],["Tomato",2,"pc"],["Olive oil",10,"ml"]]},
+ {n:"Beef mince and potato bowl",t:"l",k:700,p:45,c:2,v:0,i:[["Beef mince",180,"g"],["Potatoes",300,"g"],["Onion",1,"pc"]]},
+ {n:"Baked chicken thighs, potatoes and veg",t:"d",k:700,p:48,c:1,v:0,i:[["Chicken thighs",250,"g"],["Potatoes",300,"g"],["Frozen vegetables",150,"g"]]},
+ {n:"Salmon, rice and greens",t:"d",k:720,p:44,c:3,v:0,i:[["Salmon fillet",180,"g"],["Rice (dry)",80,"g"],["Green beans",150,"g"]]},
+ {n:"Beef and veg stir fry with noodles",t:"d",k:690,p:46,c:2,v:0,i:[["Beef strips",180,"g"],["Noodles (dry)",90,"g"],["Frozen vegetables",200,"g"],["Soy sauce",20,"ml"]]},
+ {n:"Tofu and veg curry with rice",t:"d",k:640,p:34,c:2,v:1,i:[["Tofu",250,"g"],["Rice (dry)",80,"g"],["Frozen vegetables",200,"g"],["Coconut milk",100,"ml"]]},
+ {n:"Bean chili with rice",t:"d",k:610,p:30,c:1,v:1,i:[["Kidney beans (can)",1,"pc"],["Tomato sauce",200,"g"],["Rice (dry)",80,"g"],["Onion",1,"pc"]]},
+ {n:"Chicken fajita bowl",t:"d",k:660,p:49,c:2,v:0,i:[["Chicken breast",200,"g"],["Bell pepper",2,"pc"],["Rice (dry)",80,"g"],["Onion",1,"pc"]]}
+];
+
+let plan = null;
+
+function weekKey(){
+  const d = new Date();
+  const start = new Date(d.getFullYear(),0,1);
+  const wk = Math.ceil((((d - start)/86400000) + start.getDay()+1)/7);
+  return d.getFullYear()+"-W"+wk;
+}
+function isPro(){ try{return localStorage.getItem("gm_pro")==="1";}catch(e){return false;} }
+function get(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
+function set(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
+
+function pool(type){
+  const budget = +document.getElementById("budget").value;
+  const diet = document.getElementById("diet").value;
+  let p = MEALS.filter(m=>m.t===type && m.c<=budget && (diet==="any"||m.v===1));
+  if(!p.length) p = MEALS.filter(m=>m.t===type);
+  return p;
+}
+function rand(arr, avoid){
+  let options = arr.filter(m=>!avoid||m.n!==avoid);
+  if(!options.length) options = arr;
+  return options[Math.floor(Math.random()*options.length)];
+}
+
+function generate(){
+  const limit = document.getElementById("limitMsg");
+  limit.classList.add("hidden");
+  if(!isPro() && get("gm_week")===weekKey()){
+    limit.textContent = "You already used your free plan this week. Go Pro for unlimited plans, or come back next week.";
+    limit.classList.remove("hidden");
+    if(plan) return; // keep showing the existing plan
+    const saved = get("gm_plan");
+    if(saved){ plan = JSON.parse(saved); render(); }
+    return;
+  }
+  const days = [];
+  let prev = {b:null,l:null,d:null};
+  for(let i=0;i<7;i++){
+    const day = {};
+    ["b","l","d"].forEach(t=>{ day[t] = rand(pool(t), prev[t]); prev[t] = day[t].n; });
+    days.push(day);
+  }
+  plan = {days, kcal:+document.getElementById("kcal").value};
+  set("gm_week", weekKey());
+  set("gm_plan", JSON.stringify(plan));
+  render();
+}
+
+function factor(day){
+  const total = day.b.k + day.l.k + day.d.k;
+  const f = plan.kcal / total;
+  return Math.round(Math.min(1.6, Math.max(0.7, f))*10)/10;
+}
+
+function swap(i,t){
+  if(!isPro()){ alert("Swapping meals is a Pro feature."); return; }
+  plan.days[i][t] = rand(pool(t), plan.days[i][t].n);
+  set("gm_plan", JSON.stringify(plan));
+  render();
+}
+
+function render(){
+  document.getElementById("result").classList.remove("hidden");
+  const names = {b:"Breakfast",l:"Lunch",d:"Dinner"};
+  let html = "";
+  plan.days.forEach((day,i)=>{
+    const f = factor(day);
+    const kcal = Math.round((day.b.k+day.l.k+day.d.k)*f);
+    const prot = Math.round((day.b.p+day.l.p+day.d.p)*f);
+    html += `<div class="day"><strong>Day ${i+1}</strong> <span class="muted">${kcal} kcal, ${prot}g protein, portions x${f}</span>`;
+    ["b","l","d"].forEach(t=>{
+      html += `<div class="meal"><span>${names[t]}: ${day[t].n}</span><button class="small" onclick="swap(${i},'${t}')">Swap</button></div>`;
+    });
+    html += "</div>";
+  });
+  document.getElementById("plan").innerHTML = html;
+
+  const totals = {};
+  plan.days.forEach(day=>{
+    const f = factor(day);
+    ["b","l","d"].forEach(t=>{
+      day[t].i.forEach(([name,qty,unit])=>{
+        const key = name+"|"+unit;
+        totals[key] = (totals[key]||0) + qty*f;
+      });
+    });
+  });
+  const lines = Object.keys(totals).sort().map(k=>{
+    const [name,unit] = k.split("|");
+    return {name, qty:Math.ceil(totals[k]), unit};
+  });
+  document.getElementById("groceries").innerHTML = lines.map(l=>
+    `<li><label style="font-weight:400;display:flex;gap:8px"><input type="checkbox" style="width:auto"> ${l.qty} ${l.unit} ${l.name}</label></li>`).join("");
+  window._lines = lines;
+}
+
+function copyList(){
+  const text = (window._lines||[]).map(l=>l.qty+" "+l.unit+" "+l.name).join("\n");
+  if(navigator.clipboard){ navigator.clipboard.writeText(text).then(()=>alert("Grocery list copied!")); }
+}
+
+function unlock(){
+  const code = document.getElementById("code").value.trim();
+  const msg = document.getElementById("proMsg");
+  if(PRO_CODES.includes(code)){ set("gm_pro","1"); msg.textContent = "Pro unlocked on this device. Enjoy!"; }
+  else { msg.textContent = "That code is not valid."; }
+}
+
+document.getElementById("buyLink").href = BUY_LINK;
+if(isPro()) document.getElementById("proMsg").textContent = "Pro is active on this device.";
+</script>
+</body>
+</html>
